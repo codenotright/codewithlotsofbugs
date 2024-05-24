@@ -71,18 +71,34 @@ int main()
 	// 初始化 OpenSSL
 	ERR_load_CRYPTO_strings();
 	OpenSSL_add_all_algorithms();
-	std::cout<<"initalize complete\n";
+	
 	// 生成服务器的 DH 参数
 	DH *dh = DH_new();
 	if (!DH_generate_parameters_ex(dh, 512, DH_GENERATOR_2, nullptr)) {
 	handleErrors();
-	}
-	std::cout<<"DH INIT COMPLETE\n";
+	}std::cout<<"initalize complete\n";
+	
+	BIGNUM* p = BN_dup(DH_get0_p(dh));
+	BIGNUM* g = BN_dup(DH_get0_g(dh));
+	int p_len = BN_num_bytes(p); 
+	unsigned char* p_data = (unsigned char*)OPENSSL_malloc(p_len);
+	std::cout<<p_len<<std::endl;
+	BN_bn2bin(p,p_data); 
+	print_hex(p_data);
+	//char* g_str = BN_bn2dec(g);
+	int g_len = BN_num_bytes(g); 
+	unsigned char* g_data = (unsigned char*)OPENSSL_malloc(g_len);
+	BN_bn2bin(g,g_data);  
+	std::cout<<std::endl<<"glen   "<<g_len<<"   "<<p_len<<std::endl;
+
+	//复制服务器的DH参数
+	std::cout<<"copy complete"<<std::endl;
+
 	// 生成服务器的私钥和公钥对
 	if (!DH_generate_key(dh)) {
 		handleErrors();
 	}
-	std::cout<<"DH key COMPLETE\n";
+
 	// 提取服务器的公钥
 	const BIGNUM *pub_key = DH_get0_pub_key(dh);
 	// 计算公钥的字节长度
@@ -127,6 +143,9 @@ int main()
 	    	}
 	    	std::cout<<"new connection estabished\n";
 	    	read(new_socket, iv, sizeof(iv));
+	    	send(new_socket, p_data, p_len, 0);
+	    	send(new_socket, g_data, g_len, 0);
+	    	//send(new_socket, q_str, strlen(q_str), 0);
 	    	std::cout<<"iv received: "<<iv<<" \n";
 	    	//read(new_socket, pub_key_data, sizeof(pub_key_data));
 	    	int data_length=read(new_socket, buffer, BUFFER_SIZE);
@@ -147,12 +166,14 @@ int main()
 		BIGNUM *secured_pub_key=BN_bin2bn(client_pub_key_data, data_length, NULL);
 		
 		// 计算共享密钥
+		unsigned char sharedsecret[256];
 		unsigned char shared_secret[32];
 		memset(shared_secret,0,sizeof(shared_secret));
-		int secret_size = DH_compute_key(shared_secret,secured_pub_key, dh);
+		int secret_size = DH_compute_key(sharedsecret,secured_pub_key, dh);
 		if (secret_size == -1) {
 			handleErrors();
 		}
+		for(int i=0;i<32;i++){shared_secret[i]=sharedsecret[i];}
 		//std::cout<<"real key got: "<<shared_secret<<" \n";
 		printf("下面是计算得到的共享秘钥,长度：%d  内容 ：\n",secret_size);
 		print_hex(shared_secret);

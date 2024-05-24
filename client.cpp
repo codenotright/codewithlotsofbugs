@@ -62,31 +62,8 @@ int main() {
 	ERR_load_CRYPTO_strings();
    	OpenSSL_add_all_algorithms();
    	//初始化openSSL
-   	std::cout<<"initalize complete\n";
    	
-	DH *dh = DH_new();
-	if (!DH_generate_parameters_ex(dh, 512, DH_GENERATOR_2, nullptr)) {
-	handleErrors();
-	}
-	//生成客户端的DH参数
-	std::cout<<"DH INIT COMPLETE\n";
-
-	if (!DH_generate_key(dh)) {
-	handleErrors();
-	}
-	//生成客户端的私钥和公钥对
-
-	// 提取客户端的公钥
-	const BIGNUM *pub_key = DH_get0_pub_key(dh);
-	// 计算公钥的字节长度
-	int pub_key_length = BN_num_bytes(pub_key);
-
-	// 分配足够大小的缓冲区来存储公钥的字节数据
-	unsigned char *pub_key_data = new unsigned char[pub_key_length];
-
-	// 将公钥转换为字节数据
-	BN_bn2bin(pub_key, pub_key_data);
-	print_hex(pub_key_data);
+	
 	
 	
 	if (!RAND_bytes(iv, iv_length)) {
@@ -121,6 +98,64 @@ int main() {
 	std::string message = "Request for public key";
 	//send(sock, message.c_str(), message.length(), 0);
 	send(sock,iv,iv_length,0);
+	
+	BIGNUM* p = BN_new();
+	BIGNUM* g = BN_new();
+	std::cout<<"新建一\n";
+	int len=read(sock, buffer, BUFFER_SIZE);
+	
+	unsigned char *tem=new unsigned char [len];
+	memset(tem,0,sizeof(tem));
+	for(int i=0;i<len;i++){tem[i]=buffer[i];}
+	std::cout<<len<<std::endl;
+	print_hex(tem);
+	// 将接收到的字符串转换为 BIGNUM 对象
+	//std::cout<<(p==nullptr)<<(tem==nullptr)<<len<<std::endl;
+	if (BN_bin2bn(tem,len,p) == 0) {
+	    exit(EXIT_FAILURE);
+	}
+	std::cout<<"已转换";
+	//BIGNUM* q = BN_new();
+	//read(sock, buffer, BUFFER_SIZE);
+	// 将接收到的字符串转换为 BIGNUM 对象
+	//if (BN_dec2bn(&q, (char*)buffer) == 0) {
+	//    exit(EXIT_FAILURE);
+	//}
+	len=read(sock, buffer, BUFFER_SIZE);
+	if (BN_bin2bn(buffer,len,g) == 0) {
+	    exit(EXIT_FAILURE);
+	}
+	
+	
+	
+	DH *dh = DH_new();
+	if (!DH_set0_pqg(dh, p, nullptr, g)) {
+	handleErrors();
+	}
+	//生成客户端的DH参数
+	std::cout<<"DH INIT COMPLETE\n";
+
+	if (!DH_generate_key(dh)) {
+	handleErrors();
+	}
+	//生成客户端的私钥和公钥对
+
+	// 提取客户端的公钥
+	const BIGNUM *pub_key = DH_get0_pub_key(dh);
+	// 计算公钥的字节长度
+	int pub_key_length = BN_num_bytes(pub_key);
+
+	// 分配足够大小的缓冲区来存储公钥的字节数据
+	unsigned char *pub_key_data = new unsigned char[pub_key_length];
+
+	// 将公钥转换为字节数据
+	BN_bn2bin(pub_key, pub_key_data);
+	print_hex(pub_key_data);
+	
+	
+	
+	
+	
 	send(sock,pub_key_data,pub_key_length,0);
 	std::cout << "iv sent: "<<iv<<" \n";
 	//std::cout << "public key sent: "<<pub_key_data<<" \n";
@@ -142,12 +177,14 @@ int main() {
 	print_hex(server_pub_key_data);
 	
 	BIGNUM *secured_pub_key=BN_bin2bn(server_pub_key_data, data_length, NULL);
+	unsigned char sharedsecret[256];
 	unsigned char shared_secret[32];
-	memset(shared_secret,0,sizeof(shared_secret));
-	int secret_size = DH_compute_key(shared_secret,secured_pub_key, dh);
+	memset(sharedsecret,0,sizeof(sharedsecret));
+	int secret_size = DH_compute_key(sharedsecret,secured_pub_key, dh);
 	if (secret_size == -1) {
 		handleErrors();
 	}
+	for(int i=0;i<32;i++){shared_secret[i]=sharedsecret[i];}
 	printf("下面是计算得到的共享秘钥,长度：%d  内容 ：\n",secret_size);
 	print_hex(shared_secret);
 	message = "this is a test message for AES";
