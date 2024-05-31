@@ -1,41 +1,51 @@
-# Makefile for compiling client and server programs with OpenSSL support
-
-# Compiler to use
+# Compiler
 CXX = g++
 
 # Compiler flags
-#CXXFLAGS = -Wall -Wextra -std=c++11
-CXXFLAGS = -w -std=c++11
+CXXFLAGS = -std=c++11 -Wall -Iinclude
 
-# OpenSSL include and library paths (adjust if necessary)
-OPENSSL_INCLUDE = -I/usr/include/openssl
-OPENSSL_LIB = -L/usr/lib -lssl -lcrypto
-
-# Targets
-TARGETS = client server
+# Linker flags (for OpenSSL)
+LDFLAGS = -lssl -lcrypto
 
 # Source files
-CLIENT_SRC = client.cpp
-SERVER_SRC = server.cpp
+SRCS = $(wildcard src/*.cpp)
 
-# Executable files
-CLIENT_EXE = client
-SERVER_EXE = server
+# Object files for main1 and main2
+OBJS_COMMON = $(SRCS:.cpp=.o)
 
-# Default rule
-all: $(TARGETS)
+OBJS_DEMO_SERVER = $(OBJS_COMMON) demo_server.o
+OBJS_DEMO_CLIENT = $(OBJS_COMMON) demo_client.o
 
-# Rule for client
-client: $(CLIENT_SRC)
-	$(CXX) $(CXXFLAGS) $(OPENSSL_INCLUDE) -o $(CLIENT_EXE) $(CLIENT_SRC) $(OPENSSL_LIB)
+# Executable names
+TARGET1 = server
+TARGET2 = client
 
-# Rule for server
-server: $(SERVER_SRC)
-	$(CXX) $(CXXFLAGS) $(OPENSSL_INCLUDE) -o $(SERVER_EXE) $(SERVER_SRC) $(OPENSSL_LIB)
+# Default target
+all: $(TARGET1) $(TARGET2)
 
-# Clean rule to remove executables
+# Rule to link the first executable
+$(TARGET1): $(OBJS_MAIN1)
+	$(CXX) $(OBJS_DEMO_SERVER) -o $(TARGET1) $(LDFLAGS)
+
+# Rule to link the second executable
+$(TARGET2): $(OBJS_MAIN2)
+	$(CXX) $(OBJS_DEMO_CLIENT) -o $(TARGET2) $(LDFLAGS)
+
+# Rule to compile source files into object files
+src/%.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+
+# Rule to compile source files into object files
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Clean up build files
 clean:
-	rm -f $(CLIENT_EXE) $(SERVER_EXE)
+	rm -f $(OBJS_COMMON) demo_server.o demo_client.o $(TARGET1) $(TARGET2)
+
+clear:
+	rm -f $(OBJS_COMMON) $(TARGET1) $(TARGET2)
 
 # Phony targets
 .PHONY: all clean
