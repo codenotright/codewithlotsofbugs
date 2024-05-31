@@ -1,8 +1,0 @@
-下面是客户端本身的公钥：
-9b3893e4c3f53ec3
-下面是客户端接收到的来自服务器端的公钥：
-ad9a623271dd641b
-下面是计算得到的共享秘钥,长度：256  内容 ：
-719ee5fa7400af41
-test message proceeded
-test message sent
