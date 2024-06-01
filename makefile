@@ -2,7 +2,8 @@
 CXX = g++
 
 # Compiler flags
-CXXFLAGS = -std=c++11 -Wall -Iinclude
+CXXFLAGS = -std=c++11 -w -Iinclude
+#CXXFLAGS = -std=c++11 -Wall -Iinclude
 
 # Linker flags (for OpenSSL)
 LDFLAGS = -lssl -lcrypto

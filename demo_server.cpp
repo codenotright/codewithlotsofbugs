@@ -8,7 +8,7 @@ int main(int argc, char *argv[]){
 	ERR_load_CRYPTO_strings();
    	OpenSSL_add_all_algorithms();
 	DH_server server;
-	if (server.start_DH_server()) {
+	if (server.start_DH_server("127.0.0.1",12000)) {
         	std::cout << "Server started, waiting for clients..." << std::endl;
        		server.accept_DH_client();
 	} else {

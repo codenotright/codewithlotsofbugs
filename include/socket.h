@@ -1,11 +1,15 @@
 #ifndef __SOCKET_H_
 #define __SOCKET_H_
 
+#include "decrypt.h"
+#include "encrypt.h"
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <openssl/bn.h>
+#include <openssl/dh.h>
 
 #define AUTO_ADDRESS "127.0.0.1"
 #define PORT 12000
@@ -16,10 +20,10 @@
 // basic parameter definition
 
 class basic_socket{
-private:
+protected:
 	int sockfd;	
-	sockadd_in addr;
-	unsigned char* buffer[BUFFER_SIZE];
+	sockaddr_in addr;
+	unsigned char buffer[BUFFER_SIZE];
 	int recv_len;
 public:
 	basic_socket():sockfd(-1),recv_len(0){
@@ -28,16 +32,22 @@ public:
 	}
 	virtual ~basic_socket(){if(sockfd!=-1){close(sockfd);}}
 	
-	bool create(int socketfd=sockfd);
-	bool bind(const std::string& address=AUTO_ADDRESS,int port=PORT,int socketfd=sockfd);
-	bool connect(const std::string& address=AUTO_ADDRESS,int port=PORT,int socketfd=sockfd);
-	bool send(const std::string& message,int socketfd=sockfd);
-	bool send(unsigned char* str,int socketfd=sockfd);
-	std::string receive(int socketfd=sockfd);
+	bool create(int socketfd);
+	bool create();
+	bool bind(int socketfd,const std::string& address=AUTO_ADDRESS,int port=PORT);
+	bool bind(const std::string& address=AUTO_ADDRESS,int port=PORT);
+	bool connect(int socketfd,const std::string& address=AUTO_ADDRESS,int port=PORT);
+	bool connect(const std::string& address=AUTO_ADDRESS,int port=PORT);
+	bool send(int socketfd,const std::string& message);
+	bool send(const std::string& message);
+	bool send(int socketfd,unsigned char* str);
+	bool send(unsigned char* str);
+	bool receive(int socketfd);
+	bool receive();
 };
 
-class DH_socket():public basic_socket{
-private:
+class DH_socket:virtual public basic_socket{
+protected:
 	BIGNUM *p;
 	BIGNUM *q;
 	BIGNUM *g;
@@ -50,54 +60,62 @@ private:
 public:
 	DH_socket():basic_socket(){
 		dh=DH_new();
-		//p=BN_new();
-		//q=BN_new();
-		//g=BN_new();
-		//tmp_bn=BN_new();
-		//pub_key_for_receive=BN_new();
-		//pub_key_for_send=BN_new();
+		p=BN_new();
+		q=BN_new();
+		g=BN_new();
+		tmp_bn=BN_new();
+		pub_key_for_receive=BN_new();
+		pub_key_for_send=BN_new();
 	}
-	~DH_socket(){
+	virtual ~DH_socket(){
 		DH_free(dh);
-		//DH_free(p);
-		//DH_free(q);
-		//DH_free(g);
-		//DH_free(tmp_bn);
-		//DH_free(pub_key_for_receive);
-		//DH_free(pub_key_for_send);
+		BN_free(p);
+		BN_free(q);
+		BN_free(g);
+		BN_free(tmp_bn);
+		BN_free(pub_key_for_receive);
+		BN_free(pub_key_for_send);
 	}
 public:
-	bool send(BIGNUM *tmp,int socketfd=sockfd);
-	bool BN_receive(int socketfd=sockfd);
-private:
+	bool send(int socketfd,BIGNUM *tmp);
+	bool send(BIGNUM *tmp);
+	bool BN_receive(int socketfd);
+	bool BN_receive();
+protected:
 	bool AES_key_generator(BIGNUM *k,DH *dh);
 };
 
-class client_socket : public basic_socket {
+class client_socket :virtual  public basic_socket {
 public:
-    	bool connect2server(const std::string& address=AUTO_ADDRESS, int port=PORT,int socketfd=sockfd);
+    	bool connect2server(int socketfd,const std::string& address=AUTO_ADDRESS, int port=PORT);
+    	bool connect2server(const std::string& address=AUTO_ADDRESS, int port=PORT);
 };
 
-class server_socket : public basic_socket {
+class server_socket :virtual  public basic_socket {
 public:
-    	bool start_server(const std::string& address, int port,int socketfd=sockfd);
+    	bool start_server(int socketfd,const std::string& address, int port);
+    	bool start_server(const std::string& address, int port);
 
-    	void accept_client(int socketfd=sockfd); 
+    	void accept_client(int socketfd); 
+    	void accept_client(); 
 };
 
 class DH_server:public DH_socket,public server_socket{
 public:
-	bool start_DH_server(const std::string& address,int port,int socketfd=sockfd);
+	bool start_DH_server(int socketfd,const std::string& address,int port);
+	bool start_DH_server(const std::string& address,int port);
 	
-	void accept_DH_client(int socketfd=sockfd);
+	void accept_DH_client(int socketfd);
+	void accept_DH_client();
 
-}
+};
 
 class DH_client:public DH_socket,public client_socket{
 public:
-	bool connect2_DH_server(const std::string& address=AUTO_ADDRESS, int port=PORT,int socketfd=sockfd);
+	bool connect2_DH_server(int socketfd,const std::string& address=AUTO_ADDRESS, int port=PORT);
+	bool connect2_DH_server(const std::string& address=AUTO_ADDRESS, int port=PORT);
 
-}
+};
 #endif
 
 

@@ -7,8 +7,7 @@
 int main(int argc, char *argv[]){
 	ERR_load_CRYPTO_strings();
    	OpenSSL_add_all_algorithms();
-	DH_client server;
-	ClientSocket client;
+	DH_client client;
 	if (client.connect2_DH_server()) {
 		//client.communicate();
 	} else {
