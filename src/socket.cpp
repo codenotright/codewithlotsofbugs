@@ -1,29 +1,22 @@
 #include "socket.h"
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
-
-bool basic_socket::create(int socketfd)
-{
-	socketfd=socket(AF_INET,SOCK_STREAM,0);
-	return socketfd!=-1;
-}
 bool basic_socket::create()
 {
-	return create(sockfd);
+	sockfd=socket(AF_INET,SOCK_STREAM,0);
+	std::cout<<sockfd;
+	return sockfd!=-1;
 }
+//bool basic_socket::create()
+//{
+//	return create(sockfd);
+//}
 
 bool basic_socket::bind(int socketfd,const std::string& address,int port)
 {
 	sockaddr_in addr;
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = inet_addr(address.c_str());
+	addr.sin_addr.s_addr = INADDR_ANY;//inet_addr(address.c_str());
 	return ::bind(socketfd, (struct sockaddr*)&addr, sizeof(addr)) != -1;
 }
 bool basic_socket::bind(const std::string& address,int port)
@@ -33,11 +26,22 @@ bool basic_socket::bind(const std::string& address,int port)
 
 bool basic_socket::connect(int socketfd,const std::string& address,int port)
 {
-	sockaddr_in addr;
+	struct sockaddr_in addr;
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = inet_addr(address.c_str());
-	return ::connect(socketfd, (struct sockaddr*)&addr, sizeof(addr)) != -1;
+	if (inet_pton(AF_INET, address.c_str(), &addr.sin_addr) <= 0) {
+		perror("\033[31mInvalid address/ Address not supported\033[0m");
+		return 0;
+	}
+	
+	//addr.sin_addr.s_addr = inet_addr(address.c_str());
+	std::cout<<socketfd<<address<<port;
+	if (::connect(socketfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		perror("\033[31mConnection Failed\033[0m");
+		return 0;
+	}
+	smp("connection established");
+	return 1;//::connect(socketfd, (struct sockaddr*)&addr, sizeof(addr)) != -1;
 }
 bool basic_socket::connect(const std::string& address,int port)
 {
@@ -63,7 +67,7 @@ bool basic_socket::send(unsigned char* str)
 
 bool basic_socket::receive(int socketfd)
 {
-	recv_len = ::recv(socketfd, buffer, sizeof(buffer) - 1, 0);
+	recv_len = ::recv(socketfd, buffer, sizeof(buffer), 0);
 	return recv_len > 0;
 }
 bool basic_socket::receive()
@@ -73,12 +77,19 @@ bool basic_socket::receive()
 
 bool DH_socket::send(int socketfd,BIGNUM *tmp)
 {
+	std::cout<<(tmp==nullptr);
+	smp("BIGNUM send method started");
+	std::cout<<(tmp==nullptr);
 	int tmp_len=BN_num_bytes(tmp);
-	unsigned char *str=new unsigned char[tmp_len];
+	smp("length confirmed");
+	unsigned char *str=new unsigned char[tmp_len*2];
+	smp("address commiitted");
 	BN_bn2bin(tmp, str);
+	smp("transmition completed");
 	if (::send(socketfd, str, tmp_len, 0) != -1){
 		free(str);
 		str=NULL;
+		smp("DH sent");
 		return 1;
 	}else{
 		free(str);
@@ -94,10 +105,17 @@ bool DH_socket::send(BIGNUM *tmp)
 
 bool DH_socket::BN_receive(int socketfd)
 {
-	recv_len = ::recv(socketfd, buffer, sizeof(buffer) - 1, 0);
+	smp("BN receive method started");
+	recv_len = ::recv(socketfd, buffer, sizeof(buffer), 0);
+	if (recv_len<=0){
+		perror("\033[31mREAD BN Failed\033[0m");
+		return 0;
+	}
 	if (BN_bin2bn(buffer,recv_len,tmp_bn) != 0) {
+		smp("BN transmition successful");
 	   	return 1;
 	}else{
+		std::cout<<recv_len;
 		return 0;
 	}
 }
@@ -118,7 +136,7 @@ bool DH_socket::AES_key_generator(BIGNUM *k,DH *dh)
 	unsigned char tmp[GENERATOR_LENGTH/sizeof(unsigned char)];
 	int secret_size = DH_compute_key(tmp,k, dh);
 	if (secret_size == -1) {
-		perror("compute_key error");
+		perror("\033[31mcompute_key error\033[0m");
 		return 0;
 	}
 	for(int i=0;i<AES_KEY_LENGTH;++i){
@@ -129,14 +147,16 @@ bool DH_socket::AES_key_generator(BIGNUM *k,DH *dh)
 
 bool client_socket::connect2server(int socketfd,const std::string& address, int port)
 {
-    	if(!create(socketfd)){
-    		perror("client host - creation error");
+    	if(!create()){
+    		perror("\033[31mclient host - creation error\033[0m");
     		return 0;
     	}
+    	smp("creat sucess");
     	if(!connect(address,port)){
-    		perror("client host - connection failed");
+    		perror("\033[31mclient host - connection failed\033[0m");
     		return 0;
     	}
+    	smp("connect success");
         return 1;
 }
 bool client_socket::connect2server(const std::string& address, int port)
@@ -147,15 +167,15 @@ bool client_socket::connect2server(const std::string& address, int port)
 bool server_socket::start_server(int socketfd,const std::string& address, int port)
 {
     	if(!create()){
-    		perror("server host - creation error");
+    		perror("\033[31mserver host - creation error\033[0m");
     		return 0;
     	}
     	if(!bind(address,port)){
-		perror("server host - bind error");
+		perror("\033[31mserver host - bind error\033[0m");
 		return 0;
 	}
 	if(!listen(socketfd,3)){
-		perror("server host - listen error");
+		perror("\033[31mserver host - listen error\033[0m");
 		return 0;
 	}
         return  1;
@@ -194,80 +214,118 @@ void server_socket::accept_client()
 我下次一定认真听课
 ********************************/
 
-bool DH_server::start_DH_server(int socketfd,const std::string& address, int port)
+bool DH_server::start_DH_server(const std::string& address, int port)
 {
+    	std::cout<<sockfd;
     	if(!create()){
-    		perror("server host - creation error");
+    		perror("\033[31mserver host - creation error\033[0m");
     		return 0;
     	}
+    	//std::cout<<" "<<socketfd<<" "<<sockfd<<" ";
+    	//std::cout<<"\033[32m\033[0m"<<std::endl;
+    	smp("create succuess");
     	if(!bind(address,port)){
-		perror("server host - bind error");
+		perror("\033[31mserver host - bind error\033[0m");
 		return 0;
 	}
-	if(!listen(socketfd,3)){
-		perror("server host - listen error");
+	smp("bind success");
+	if(listen(sockfd,3)<0){
+		perror("\033[31mserver host - listen error\033[0m");
 		return 0;
 	}
 	//DH *dh = DH_new();
 	if (!DH_generate_parameters_ex(dh, GENERATOR_LENGTH, DH_GENERATOR_2, nullptr)) {
-		perror("server host - DH_generate_parameters_ex");
+		perror("\033[31mserver host - DH_generate_parameters_ex\033[0m");
 		return 0;
 	}
 	p = BN_dup(DH_get0_p(dh));
 	g = BN_dup(DH_get0_g(dh));
 	if (!DH_generate_key(dh)) {
-		perror("server host - DH_generate_key");
+		perror("\033[31mserver host - DH_generate_key\033[0m");
 		return 0;
 	}
 	pub_key_for_send = const_cast<BIGNUM*>(DH_get0_pub_key(dh));
+	smp("generate success");
+	
+	running = true;
+        server_thread = std::thread(&DH_server::run_DH_server, this);
+        
+	smp("running start");
+	std::cout<<sockfd<<"listening on "<<address<<" "<<port<<std::endl;
         return  1;
 }
 
-bool DH_server::start_DH_server(const std::string& address, int port)
-{
-	return start_DH_server(sockfd,address,port);
-}
+//bool DH_server::start_DH_server(const std::string& address, int port)
+//{
+//	return start_DH_server(sockfd,address,port);
+//}
 
 void DH_server::accept_DH_client(int socketfd)
 {
         sockaddr_in clientAddr;
         socklen_t clientAddrLen = sizeof(clientAddr);
-        int clientSock = accept(sockfd, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        //smp("start accept");
+        int clientSock = accept(socketfd, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        //
+        if (clientSock != -1) smp(clientSock);
         if (clientSock != -1){
+        	smp("connection established");
 		memset(buffer, 0, sizeof(buffer));
 		if (!send(clientSock,p)){
-			perror("send p error");
+			perror("\033[31msend p error\033[0m");
 			return;
 		}
-		if (receive(clientSock)){
-			perror("receive iv error");
+		smp("var p sent");
+		std::cout<<"p:"<<p<<std::endl;
+		if (!receive(clientSock)){
+			print_hex(buffer);
+			perror("\033[31mreceive iv error\033[0m");
 			return;
 		}
+		smp("iv received");
 		for(int i=0;i<recv_len;++i){
 			iv[i]=buffer[i];
 		}
+		smp("iv copied");
+		print_hex(iv);
 		if (!send(clientSock,g)){
-			perror("send g error");
+			perror("\033[31msend g error\033[0m");
 			return;
 		}
-		if (BN_receive()){
-			perror("receive pub key error");
+		smp("var g sent");
+		std::cout<<"g:"<<g<<std::endl;
+		if (!BN_receive(clientSock)){
+			perror("\033[31mreceive pub key error\033[0m");
 			return;
 		}
-		pub_key_for_receive=tmp_bn;
-		if (send(clientSock,pub_key_for_receive)){
-			perror("send pub key error");
+		BN_copy(pub_key_for_receive,tmp_bn);
+		smp("pub key received");
+		if (!send(clientSock,pub_key_for_send)){
+			perror("\033[31msend pub key error\033[0m");
 			return;
 		}
+		smp("pub key sent");
 		if (!AES_key_generator(pub_key_for_receive,dh)){
-			perror("generate aes key error");
+			perror("\033[31mgenerate aes key error\033[0m");
 			return;
 		}
-		
-		recv_len=receive();
+		smp("key generated successfully");
+		memset(buffer,0,sizeof(buffer));
+		print_hex(AES_key);
+		if (!receive(clientSock)){
+			perror("\033[31message receive error\033[0m");
+		}
 		unsigned char text[BUFFER_SIZE];
+		smp("decrypting...");
+		//print_hex(AES_key);
+		//print_hex(iv);
+		std::cout<<recv_len;
 		AES_decrypt(buffer,recv_len,AES_key,iv,text);
-		std::cout<<text;
+		
+		smp("decrypt successfully,text below");
+		printf("\033[32m%s\033[0m\n",text);
+		smp("going to close present socket");
+		
 		//while(1){
 			
 		//}
@@ -283,48 +341,86 @@ void DH_server::accept_DH_client()
 bool DH_client::connect2_DH_server(int socketfd,const std::string& address, int port)
 {
 	if(!connect2server(socketfd,address,port)){
-		perror("basic connection fail");
+		perror("\033[31mbasic connection fail\033[0m");
 		return 0;
 	}
+	smp("connection established");
 	if (!RAND_bytes(iv, IV_LENGTH)) {
-        	perror("Error generating random IV");
+        	perror("\033[31mError generating random IV");
         	return 0;
     	}
+    	smp("iv generated");
+    	print_hex(iv);
     	if (!BN_receive()){
-    		perror("receive p fail");
+    		perror("\033[31mreceive p fail\033[0m");
     		return 0;
     	}
-    	p=tmp_bn;
+    	smp("var p received");
+    	//*p=*tmp_bn;
+    	BN_copy(p,tmp_bn);
+    	//std::cout<<"p:"<<p<<std::endl;
+    	//BN_free(tmp_bn);
+    	//tmp_bn=nullptr;
+    	//tmp_bn=BN_new();
+    	
     	if (!basic_socket::send(sockfd,iv)){
-    		perror("iv send fail");
+    		perror("\033[31miv send fail\033[0m");
     		return 0;
     	}
+    	smp("iv sent");
+    	print_hex(iv);
     	if (!BN_receive()){
-    		perror("receive g fail");
+    		perror("\033[31mreceive g fail\033[0m");
     		return 0;
     	}
+    	smp("var g received");
+    	//*g=*tmp_bn;
+    	BN_copy(g,tmp_bn);
+    	//std::cout<<"g:"<<g<<std::endl;
     	if (!DH_set0_pqg(dh, p, nullptr, g)) {
-		perror("create dh error");
+		perror("\033[31mcreate dh error\033[0m");
 		return 0;
 	}
+	std::cout<<(dh==nullptr);
+	smp("p,g,dh ready");
+	if (!DH_generate_key(dh)) {
+		perror("\033[31mcreate key error\033[0m");
+		return 0;
+	}
+	//DH_generate_key(dh);
+	smp("key initialized");
 	pub_key_for_send = const_cast<BIGNUM*>(DH_get0_pub_key(dh));
-    	if (!send(pub_key_for_send)){
-    		perror("send pub key fail");
+	std::cout<<(pub_key_for_send==nullptr);
+	smp("pub key prepared");
+    	if (!send(sockfd,pub_key_for_send)){
+    		perror("\033[31msend pub key fail\033[0m");
     		return 0;
     	}
-    	if (BN_receive()){
-		perror("receive pub key error");
+    	smp("pub key sent");
+    	if (!BN_receive()){
+		perror("\033[31mreceive pub key error\033[0m");
 		return 0;
 	}
-	pub_key_for_receive=tmp_bn;
+	smp("pub key received");
+	BN_copy(pub_key_for_receive,tmp_bn);
     	if (!AES_key_generator(pub_key_for_receive,dh)){
-		perror("generate aes key error");
+		perror("\033[31mgenerate aes key error\033[0m");
 		return 0;
 	}
+	smp("key generated successfully");
+	print_hex(AES_key);
 	unsigned char text[BUFFER_SIZE];
-	std::string message="an unfriendly greeting from client: ****";
+	std::string message;//="an unfriendly greeting from client: ********";
+	std::cout<<"please input a message below\n";
+	std::getline(std::cin,message);
+	smp("encrypting...");
+	print_hex(AES_key);
+	print_hex(iv);
 	AES_encrypt((unsigned char*)message.c_str(), message.length(),AES_key,iv,text);
+	std::cout<<message.length();
+	smp("encrypt successfully");
 	basic_socket::send(text);
+	smp("encrypted message sent");
 	return 1;
 }
 
@@ -332,20 +428,4 @@ bool DH_client::connect2_DH_server(const std::string& address, int port)
 {
 	return connect2_DH_server(sockfd,address,port);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

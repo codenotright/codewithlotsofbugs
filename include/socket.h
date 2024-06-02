@@ -3,20 +3,25 @@
 
 #include "decrypt.h"
 #include "encrypt.h"
+#include "debug_tool.h"
 #include <iostream>
 #include <cstring>
+#include <thread>
+#include <atomic>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <openssl/bn.h>
 #include <openssl/dh.h>
 
-#define AUTO_ADDRESS "127.0.0.1"
+#define AUTO_ADDRESS "10.0.0.1"
 #define PORT 12000
 #define BUFFER_SIZE 4096
 #define IV_LENGTH 16
 #define AES_KEY_LENGTH 32
 #define GENERATOR_LENGTH 512
+
+#define smp(...) std::cout << "\033[32m" << __VA_ARGS__ <<"\033[0m"<< std::endl
 // basic parameter definition
 
 class basic_socket{
@@ -32,7 +37,7 @@ public:
 	}
 	virtual ~basic_socket(){if(sockfd!=-1){close(sockfd);}}
 	
-	bool create(int socketfd);
+//	bool create(int socketfd);
 	bool create();
 	bool bind(int socketfd,const std::string& address=AUTO_ADDRESS,int port=PORT);
 	bool bind(const std::string& address=AUTO_ADDRESS,int port=PORT);
@@ -93,11 +98,31 @@ public:
 
 class server_socket :virtual  public basic_socket {
 public:
+	server_socket():running(false){}
+	~server_socket() {
+		running = false;
+		if (server_thread.joinable()) {
+		    server_thread.join();
+		}
+		if (sockfd != -1) {
+		    close(sockfd);
+		}
+    	}	
+	
     	bool start_server(int socketfd,const std::string& address, int port);
     	bool start_server(const std::string& address, int port);
 
     	void accept_client(int socketfd); 
     	void accept_client(); 
+protected:    	
+    	std::atomic<bool> running;
+	std::thread server_thread;
+
+	void run_server() {
+		while (running) {
+		    accept_client();
+		}
+	}
 };
 
 class DH_server:public DH_socket,public server_socket{
@@ -107,7 +132,13 @@ public:
 	
 	void accept_DH_client(int socketfd);
 	void accept_DH_client();
-
+protected:
+	void run_DH_server(){
+		while (running) {
+		    accept_DH_client();
+		}
+	}
+	
 };
 
 class DH_client:public DH_socket,public client_socket{
